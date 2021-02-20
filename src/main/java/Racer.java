@@ -135,7 +135,8 @@ public class Racer extends AbstractBehavior<Racer.Command> {
                     //tell the controller about current position
                     message.getController().tell(new RaceController.RacerUpdateCommand(getContext().getSelf(),
                             raceLength));
-                    return Behaviors.same();
+                    message.getController().tell(new RaceController.RacerFinishedCommand(getContext().getSelf()));
+                    return Behaviors.ignore();
                 })
                 .build();
     }
