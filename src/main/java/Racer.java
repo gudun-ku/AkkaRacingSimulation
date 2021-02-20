@@ -6,7 +6,7 @@ import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 
 import java.io.Serializable;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Racer extends AbstractBehavior<Racer.Command> {
 
@@ -45,12 +45,12 @@ public class Racer extends AbstractBehavior<Racer.Command> {
     }
 
     private final double defaultAverageSpeed = 48.2;
-    private Random random;
-//    private int averageSpeedAdjustmentFactor;
 
-//    private double currentSpeed = 0;
-//    private double currentPosition = 0;
-//    private int raceLength;
+    // REMOVED STATE
+    // private Random random;
+    // private int averageSpeedAdjustmentFactor// private double currentSpeed = 0;
+    // private double currentPosition = 0;
+    // private int raceLength;
 
     private double getMaxSpeed(int averageSpeedAdjustmentFactor) {
         return defaultAverageSpeed * (1+((double)averageSpeedAdjustmentFactor / 100));
@@ -60,8 +60,11 @@ public class Racer extends AbstractBehavior<Racer.Command> {
         return currentSpeed * 1000 / 3600;
     }
 
-    private double determineNextSpeed(int raceLength, int averageSpeedAdjustmentFactor, double currentPosition) {
-        double currentSpeed = 0;
+    private double determineNextSpeed(int raceLength, double currentSpeed, double currentPosition) {
+
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        int averageSpeedAdjustmentFactor = random.nextInt(30) - 10;
+
         if (currentPosition < (raceLength / 4)) {
             currentSpeed = currentSpeed  + (((getMaxSpeed(averageSpeedAdjustmentFactor) - currentSpeed) / 10) * random.nextDouble());
         }
@@ -93,40 +96,46 @@ public class Racer extends AbstractBehavior<Racer.Command> {
     public Receive<Command> notYetStarted() {
         return newReceiveBuilder()
                 .onMessage(StartCommand.class, command -> {
-                    random = new Random();
                     int raceLength = command.getRaceLength();
-                    int averageSpeedAdjustmentFactor = random.nextInt(30) - 10;
-                    return running(raceLength, averageSpeedAdjustmentFactor, 0);
+                    double nextSpeed = determineNextSpeed(raceLength, 0, 0);
+                    return running(raceLength, nextSpeed, 0);
                 })
-
+                .onMessage(PositionCommand.class, message -> {
+                    //tell the controller about current position
+                    message.getController().tell(new RaceController.RacerUpdateCommand(getContext().getSelf(),0));
+                    return Behaviors.same();
+                })
                 .build();
     }
 
-    public Receive<Command> running(int raceLength, int averageSpeedAdjustmentFactor, double currentPosition) {
+    public Receive<Command> running(int raceLength, double currentSpeed, double currentPosition) {
         return newReceiveBuilder()
                 .onMessage(PositionCommand.class, message -> {
-                    double currentSpeed = determineNextSpeed(raceLength, averageSpeedAdjustmentFactor, currentPosition);
+                    double nextSpeed = determineNextSpeed(raceLength, currentSpeed, currentPosition);
                     double newPosition =  currentPosition + getDistanceMovedPerSecond(currentSpeed);
                     if (newPosition > raceLength ) {
                         newPosition  = raceLength;
-                        return completed(newPosition);
                     }
-
                     //tell the controller about current position
                     message.getController().tell(new RaceController.RacerUpdateCommand(getContext().getSelf(),
                             (int) newPosition));
-                    return running(raceLength, averageSpeedAdjustmentFactor, newPosition);
+
+                    if (currentPosition == raceLength) {
+                        return completed(raceLength);
+                    } else {
+                        return running(raceLength, nextSpeed, newPosition);
+                    }
                 })
                 .build();
     }
 
-    public Receive<Command> completed(double currentPosition) {
+    public Receive<Command> completed(int raceLength) {
         return newReceiveBuilder()
                 .onMessage(PositionCommand.class, message -> {
                     //tell the controller about current position
                     message.getController().tell(new RaceController.RacerUpdateCommand(getContext().getSelf(),
-                            (int) currentPosition));
-                    return this;
+                            raceLength));
+                    return Behaviors.same();
                 })
                 .build();
     }
