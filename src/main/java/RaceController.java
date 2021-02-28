@@ -132,9 +132,9 @@ public class RaceController extends AbstractBehavior<RaceController.Command> {
     public Receive<RaceController.Command> raceCompleteMessageHandler() {
         return newReceiveBuilder()
                 .onMessage(GetPositionsCommand.class, message -> {
-                    for (ActorRef<Racer.Command> racer: currentPositions.keySet()) {
-                        getContext().stop(racer);
-                    }
+//                    for (ActorRef<Racer.Command> racer: currentPositions.keySet()) {
+//                        getContext().stop(racer);
+//                    }
                     displayResults();
                     return Behaviors.withTimers(timers -> {
                         timers.cancelAll();
